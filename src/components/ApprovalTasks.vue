@@ -3,7 +3,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { Check, Search, X } from '@lucide/vue'
 import SerialApprovalMatrix from './SerialApprovalMatrix.vue'
 import StatusPill from './StatusPill.vue'
-import { approvalStatus, formatIdr, formatLongDate, formatTimestamp, printStatus, shortHash } from '../data/mockData'
+import { approvalStatus, currentPic, formatIdr, formatLongDate, formatTimestamp, printStatus, shortHash } from '../data/mockData'
 import { usePortal } from '../composables/usePortal'
 
 const portal = usePortal()
@@ -12,6 +12,7 @@ const page = ref(1)
 const pageSize = 6
 const modalId = ref(null)
 const comment = ref('')
+const commentError = ref('')
 
 const tasks = computed(() => {
   const needle = query.value.trim().toLowerCase()
@@ -73,10 +74,19 @@ function openApproval(file) {
 function closeModal() {
   modalId.value = null
   comment.value = ''
+  commentError.value = ''
 }
+
+watch(comment, () => {
+  commentError.value = ''
+})
 
 function decide(decision) {
   if (!modalFile.value) return
+  if (!comment.value.trim()) {
+    commentError.value = 'Add a comment before you approve or reject.'
+    return
+  }
   const accepted = portal.decideApproval(modalFile.value.id, decision, comment.value)
   if (accepted) comment.value = ''
 }
@@ -102,7 +112,7 @@ function decide(decision) {
     </div>
 
     <div class="overflow-x-auto">
-      <table class="w-full min-w-[920px] text-left text-[13px]">
+      <table class="w-full min-w-[1040px] text-left text-[13px]">
         <thead class="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
           <tr>
             <th class="px-3 py-3 font-semibold">File ID / SP Hash</th>
@@ -112,6 +122,7 @@ function decide(decision) {
             <th class="px-3 py-3 text-right font-semibold">Amount</th>
             <th class="px-3 py-3 font-semibold">Print Status</th>
             <th class="px-3 py-3 font-semibold">Approval Status</th>
+              <th class="px-3 py-3 font-semibold">Current PIC</th>
             <th class="sticky right-0 bg-slate-50 px-3 py-3 font-semibold shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]">Actions</th>
           </tr>
         </thead>
@@ -140,6 +151,13 @@ function decide(decision) {
             <td class="px-3 py-3">
               <StatusPill :label="approvalStatus(file).label" :tone="approvalStatus(file).tone" />
             </td>
+              <td class="px-3 py-3">
+                <template v-if="currentPic(file)">
+                  <p class="font-medium text-slate-800">{{ currentPic(file).name }}</p>
+                  <p class="text-xs text-slate-500">{{ currentPic(file).title }}</p>
+                </template>
+                <StatusPill v-else label="N/A" tone="slate" />
+              </td>
             <td class="sticky right-0 bg-white px-3 py-3 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.35)] group-hover:bg-slate-50">
               <button
                 v-if="file.reprintRequest.status === 'pending'"
@@ -154,7 +172,7 @@ function decide(decision) {
             </td>
           </tr>
           <tr v-if="!paged.length">
-            <td colspan="8" class="px-4 py-16 text-center text-slate-500">
+            <td colspan="9" class="px-4 py-16 text-center text-slate-500">
               No reprint requests match the current search.
             </td>
           </tr>
@@ -254,8 +272,14 @@ function decide(decision) {
           <SerialApprovalMatrix :document="modalFile" plain :show-request="false" :show-waiting="false" />
         </div>
 
+        <p
+          v-if="modalFile.reprintRequest.status === 'pending' && activeStep && portal.roleId !== activeStep.role"
+          class="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600"
+        >
+          Waiting on {{ activeStep.title }}. This step is not assigned to your account.
+        </p>
         <div
-          v-if="modalFile.reprintRequest.status === 'pending'"
+          v-else-if="modalFile.reprintRequest.status === 'pending'"
           class="mt-4 rounded-2xl border border-amber-200 bg-amber-50/70 p-4"
         >
           <label class="text-sm font-semibold text-slate-900" for="approval-comment">Comment</label>
@@ -268,9 +292,7 @@ function decide(decision) {
             placeholder="Record why this reprint is approved or rejected"
             data-testid="approval-comment"
           />
-          <p v-if="activeStep && portal.roleId !== activeStep.role" class="mt-2 text-xs leading-5 text-slate-600">
-            This step belongs to {{ activeStep.title }}.
-          </p>
+          <p v-if="commentError" class="mt-2 text-sm text-rose-600" data-testid="approval-comment-error">{{ commentError }}</p>
           <div class="mt-3 flex flex-wrap gap-2">
             <button type="button" class="btn btn-primary" data-testid="approve-request" @click="decide('approve')">
               <Check class="h-4 w-4" />

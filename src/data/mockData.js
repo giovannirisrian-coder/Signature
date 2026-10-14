@@ -708,10 +708,20 @@ export function printStatus(file) {
   return { label: `Printed (${count})`, tone: 'emerald' }
 }
 
+export function currentPic(file) {
+  const request = file?.reprintRequest
+  if (!request || request.status !== 'pending') return null
+  const step = request.steps[request.currentStep]
+  if (!step) return null
+  const owner = roles.find((item) => item.id === step.role)
+  return { title: step.title, name: owner?.name || '' }
+}
+
 export function approvalStatus(file) {
   const request = file?.reprintRequest
   if (!request) return { label: 'N/A', tone: 'slate' }
   if (request.status === 'pending') return { label: 'Pending Approval', tone: 'amber' }
+  if (request.status === 'approved' && request.consumed) return { label: 'Reprinted', tone: 'slate' }
   if (request.status === 'approved') return { label: 'Approved', tone: 'emerald' }
   if (request.status === 'rejected') return { label: 'Rejected', tone: 'rose' }
   return { label: 'N/A', tone: 'slate' }

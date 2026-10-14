@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { CircleAlert, Clock3, Files, Printer, Search } from '@lucide/vue'
 import StatusPill from './StatusPill.vue'
-import { approvalStatus, formatIdr, formatLongDate, printStatus, shortHash } from '../data/mockData'
+import { approvalStatus, currentPic, formatIdr, formatLongDate, printStatus, shortHash } from '../data/mockData'
 import { usePortal } from '../composables/usePortal'
 
 const portal = usePortal()
@@ -18,9 +18,9 @@ const filtered = computed(() => {
   return portal.documents.filter((file) => {
     if (from.value && file.uploadDate < from.value) return false
     if (to.value && file.uploadDate > to.value) return false
-    if (status.value === 'not_printed' && file.status !== 'not_printed') return false
-    if (status.value === 'printed' && file.status !== 'printed') return false
-    if (status.value === 'in_approval' && file.status !== 'approval_required') return false
+    if (status.value === 'not_printed' && file.printCount !== 0) return false
+    if (status.value === 'printed_once' && file.printCount !== 1) return false
+    if (status.value === 'printed_multiple' && file.printCount < 2) return false
     if (!needle) return true
     return [file.id, file.spHash, file.vendor, file.documentName].join(' ').toLowerCase().includes(needle)
   })
@@ -115,12 +115,12 @@ function resetFilters() {
           <input v-model="to" type="date" class="field mt-1" />
         </label>
         <label class="block flex-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
-          Status
+          Print Status
           <select v-model="status" class="field mt-1">
             <option value="all">All</option>
-            <option value="not_printed">Not Printed</option>
-            <option value="printed">Printed</option>
-            <option value="in_approval">In Approval</option>
+            <option value="not_printed">Not Printed (0)</option>
+            <option value="printed_once">Printed (1)</option>
+            <option value="printed_multiple">Printed (2+)</option>
           </select>
         </label>
         <label class="relative block min-w-0 flex-[1.4] text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -137,7 +137,7 @@ function resetFilters() {
       </div>
 
       <div class="overflow-x-auto">
-        <table class="w-full min-w-[920px] text-left text-[13px]">
+        <table class="w-full min-w-[1040px] text-left text-[13px]">
           <thead class="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
             <tr>
               <th class="px-3 py-3 font-semibold">File ID / SP Hash</th>
@@ -147,6 +147,7 @@ function resetFilters() {
               <th class="px-3 py-3 text-right font-semibold">Amount</th>
               <th class="px-3 py-3 font-semibold">Print Status</th>
               <th class="px-3 py-3 font-semibold">Approval Status</th>
+              <th class="px-3 py-3 font-semibold">Current PIC</th>
               <th class="sticky right-0 bg-slate-50 px-3 py-3 font-semibold shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]">Actions</th>
             </tr>
           </thead>
@@ -175,6 +176,13 @@ function resetFilters() {
               <td class="px-3 py-3">
                 <StatusPill :label="approvalStatus(file).label" :tone="approvalStatus(file).tone" />
               </td>
+              <td class="px-3 py-3">
+                <template v-if="currentPic(file)">
+                  <p class="font-medium text-slate-800">{{ currentPic(file).name }}</p>
+                  <p class="text-xs text-slate-500">{{ currentPic(file).title }}</p>
+                </template>
+                <StatusPill v-else label="N/A" tone="slate" />
+              </td>
               <td class="sticky right-0 bg-white px-3 py-3 shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.35)] group-hover:bg-slate-50">
                 <button type="button" class="btn btn-dark whitespace-nowrap px-3 py-2 text-xs" @click="portal.openDocument(file.id)">
                   View & Print
@@ -182,7 +190,7 @@ function resetFilters() {
               </td>
             </tr>
             <tr v-if="!paged.length">
-              <td colspan="8" class="px-4 py-16 text-center text-slate-500">
+              <td colspan="9" class="px-4 py-16 text-center text-slate-500">
                 No SP files match the current filters.
               </td>
             </tr>
